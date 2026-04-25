@@ -437,15 +437,10 @@ function initOfficer(booth) {
             if(counterDisplay && res.totalCount !== undefined) {
                 counterDisplay.innerText = res.totalCount;
                 
-                // If Admin reset the votes, the count drops. We must reset our tracker!
-                if (res.totalCount < lastKnownCompletedCount) {
-                    lastKnownCompletedCount = res.totalCount;
-                }
-                
                 if (res.totalCount > lastKnownCompletedCount) {
-                    lastKnownCompletedCount = res.totalCount;
                     isVotingInProgress = false; // Backend confirmed success!
                 }
+                lastKnownCompletedCount = res.totalCount; // Always sync to catch resets
             }
 
             if(!res.activeToken) {
@@ -488,6 +483,12 @@ function initOfficer(booth) {
         startBtn.innerHTML = '<span class="loader"></span> Authorizing...';
         resetGrid();
         
+        // Fetch the absolute latest baseline before authorizing
+        let pollRes = await backendPollOrGet('poll', {booth: booth});
+        if (pollRes && pollRes.totalCount !== undefined) {
+            lastKnownCompletedCount = pollRes.totalCount;
+        }
+
         const res = await backendRequest('startSession', {booth: booth});
         let token = res.token || ("TOKEN-" + Math.random().toString(36).substr(2, 9));
         let voterId = res.voterId || "UNKNOWN";
