@@ -436,6 +436,12 @@ function initOfficer(booth) {
         if(res && res.status === 'success') {
             if(counterDisplay && res.totalCount !== undefined) {
                 counterDisplay.innerText = res.totalCount;
+                
+                // If Admin reset the votes, the count drops. We must reset our tracker!
+                if (res.totalCount < lastKnownCompletedCount) {
+                    lastKnownCompletedCount = res.totalCount;
+                }
+                
                 if (res.totalCount > lastKnownCompletedCount) {
                     lastKnownCompletedCount = res.totalCount;
                     isVotingInProgress = false; // Backend confirmed success!
