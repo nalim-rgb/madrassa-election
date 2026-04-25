@@ -156,10 +156,6 @@ function doPost(e) {
     
     if (action === 'endSession') {
         let booth = bodyData.booth;
-        let cache = CacheService.getScriptCache();
-        cache.remove("activeSession_" + booth);
-        cache.remove("completedPositions_" + booth);
-        
         let props = PropertiesService.getScriptProperties();
         let lock = LockService.getScriptLock();
         if(lock.tryLock(5000)) {
@@ -168,6 +164,10 @@ function doPost(e) {
             props.setProperty(countKey, (c+1).toString());
             lock.releaseLock();
         }
+
+        let cache = CacheService.getScriptCache();
+        cache.remove("activeSession_" + booth);
+        cache.remove("completedPositions_" + booth);
         
         return setJsonOutput({status: "success"});
     }

@@ -182,6 +182,7 @@ async function backendPollOrGet(action, params={}) {
     try {
         let url = BACKEND_URL + '?action=' + encodeURIComponent(action);
         for(let k in params) url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+        url += '&_t=' + new Date().getTime(); // Prevent aggressive browser caching
         const response = await fetch(url);
         return await response.json();
     } catch (e) {
@@ -320,18 +321,24 @@ async function initVoter(booth) {
         let positionTitle = positionsForBooth[currentStep].title;
         let candidateName = selectedVotes[positionTitle];
 
-        await backendRequest('vote', {
+        let res = await backendRequest('vote', {
             booth: booth,
             position: positionTitle,
             candidate: candidateName,
             sessionToken: currentToken
         });
         
-        bc.postMessage({type: 'voted', booth: booth, position: positionTitle});
-        
         isSubmitting = false;
-        currentStep++;
-        renderPosition();
+
+        if (res && res.status === 'success') {
+            bc.postMessage({type: 'voted', booth: booth, position: positionTitle});
+            currentStep++;
+            renderPosition();
+        } else {
+            alert("Network Error: Could not save your vote! Please try again or call the Officer.");
+            btn.innerHTML = 'Submit Vote';
+            btn.disabled = false;
+        }
     }
 
     async function finishVoting() {
@@ -353,7 +360,7 @@ async function initVoter(booth) {
             currentToken = null;
             currentVoterId = null;
             showScreen(screenLocked);
-        }, 4000);
+        }, 6000);
     }
 }
 
@@ -496,7 +503,7 @@ function initOfficer(booth) {
         
         setTimeout(() => {
             errorMsg.style.display = 'none';
-        }, 3000);
+        }, 6000);
     }
 }
 
