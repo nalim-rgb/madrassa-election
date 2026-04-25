@@ -48,4 +48,4 @@ const POSITIONS = [
 // GOOGLE SHEETS APP SCRIPT URL LINK
 // ============================================
 // Follow the README instructions to get this link. Paste it below inside the quotes!
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbymPO9LOmdBmhJHe0QmEfWIcd8BKpqCUg-EwuAfqFrKQZt9O31e8o-iPEPBRi4x5xju/exec"; 
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzLTR5p1JumrGMOeIsxwwBWHl_aFevBjroN06IkcWBwKzQKn0qs0heKddvqkcZNX8cJ/exec";

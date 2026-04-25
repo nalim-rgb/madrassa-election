@@ -1,4 +1,5 @@
 // Google Apps Script Web App for Madrassa Election
+// VERSION: 5 - Race Condition Final Fix
 
 const SHEET_NAME_VOTES = "Votes";
 
@@ -26,11 +27,15 @@ function doGet(e) {
     let booth = e.parameter.booth;
     let cache = CacheService.getScriptCache();
     let props = PropertiesService.getScriptProperties();
+    
     let token = cache.get("activeSession_" + booth);
     let completedRaw = cache.get("completedPositions_" + booth);
     let completed = completedRaw ? JSON.parse(completedRaw) : [];
-    let voterId = token ? cache.get("session_voter_" + token) : null;
     let totalCount = parseInt(props.getProperty(booth + "CompletedCount") || "0", 10);
+    
+    // FIX: Store voter ID on the SESSION KEY, not the token key.
+    // Token keys can be evicted by Google Cache under load causing UNKNOWN IDs.
+    let voterId = token ? (cache.get("sessionVoter_" + booth) || "UNKNOWN") : null;
     
     return setJsonOutput({
         status: "success", 
@@ -84,7 +89,6 @@ function doGet(e) {
     totals.girls = Object.keys(tokens.girls).length;
     totals.combined = totals.boys + totals.girls;
     
-    // Convert unique voters object to array and sort by latest first
     let votersList = Object.values(uniqueVoters).sort((a,b) => new Date(b.ts) - new Date(a.ts));
 
     return setJsonOutput({
@@ -111,24 +115,27 @@ function doPost(e) {
        let props = PropertiesService.getScriptProperties();
        let token = "TOKEN-" + Utilities.getUuid();
        
-       let lock = LockService.getScriptLock();
+       // Use USER lock so boys and girls can run simultaneously without blocking each other
+       let lock = LockService.getUserLock();
        let voterId = "UNKNOWN";
        try {
-           lock.waitLock(5000);
+           lock.waitLock(8000);
            let idKey = booth + "IdCount";
            let currentIdCount = parseInt(props.getProperty(idKey) || "0", 10);
            let newIdCount = currentIdCount + 1;
            props.setProperty(idKey, newIdCount.toString());
            voterId = booth.charAt(0).toUpperCase() + "-" + newIdCount.toString().padStart(3, '0');
-       } catch (e) {
-           voterId = booth.charAt(0).toUpperCase() + "-" + Math.floor(Math.random()*900+100);
+       } catch (lockErr) {
+           // If lock times out, generate a safe fallback
+           voterId = booth.charAt(0).toUpperCase() + "-ERR";
        } finally {
-           lock.releaseLock();
+           try { lock.releaseLock(); } catch(ex) {}
        }
 
-       cache.put("activeSession_" + booth, token, 3600);
-       cache.put("completedPositions_" + booth, JSON.stringify([]), 3600);
-       cache.put("session_voter_" + token, voterId, 3600);
+       // FIX: Store voter ID on a BOOTH key (not token key) so it's never evicted separately
+       cache.put("activeSession_" + booth, token, 7200);
+       cache.put("completedPositions_" + booth, JSON.stringify([]), 7200);
+       cache.put("sessionVoter_" + booth, voterId, 7200);  // <-- booth key, not token key
        
        return setJsonOutput({status: "success", token: token, voterId: voterId});
     }
@@ -136,7 +143,14 @@ function doPost(e) {
     if (action === 'vote') {
         let { booth, position, candidate, sessionToken } = bodyData;
         let cache = CacheService.getScriptCache();
-        let voterId = cache.get("session_voter_" + sessionToken) || "UNKNOWN";
+        
+        // Verify this vote belongs to the currently ACTIVE session
+        let activeToken = cache.get("activeSession_" + booth);
+        if (!activeToken || activeToken !== sessionToken) {
+            return setJsonOutput({status: "error", message: "Session token mismatch or expired."});
+        }
+        
+        let voterId = cache.get("sessionVoter_" + booth) || "UNKNOWN";
         
         let completedRaw = cache.get("completedPositions_" + booth);
         let completed = completedRaw ? JSON.parse(completedRaw) : [];
@@ -149,25 +163,45 @@ function doPost(e) {
         sheet.appendRow([new Date(), booth, position, candidate, sessionToken, voterId]);
         
         completed.push(position);
-        cache.put("completedPositions_" + booth, JSON.stringify(completed), 3600);
+        cache.put("completedPositions_" + booth, JSON.stringify(completed), 7200);
         
         return setJsonOutput({status: "success"});
     }
     
     if (action === 'endSession') {
         let booth = bodyData.booth;
+        let sessionToken = bodyData.sessionToken; // FIX: frontend must send this
+        let cache = CacheService.getScriptCache();
+        
+        // FIX: Only clear the session if the token we're ending is STILL the active one.
+        // This prevents a finishing voter from killing a brand-new session that just started!
+        let currentActiveToken = cache.get("activeSession_" + booth);
+        if (sessionToken && currentActiveToken && currentActiveToken !== sessionToken) {
+            // A new session was already started — do NOT clear it! Just increment count.
+            let props = PropertiesService.getScriptProperties();
+            let lock = LockService.getUserLock();
+            if (lock.tryLock(5000)) {
+                let countKey = booth + "CompletedCount";
+                let c = parseInt(props.getProperty(countKey) || "0", 10);
+                props.setProperty(countKey, (c+1).toString());
+                lock.releaseLock();
+            }
+            return setJsonOutput({status: "success", note: "new_session_preserved"});
+        }
+
+        // Safe to clear — the token matches the active session
         let props = PropertiesService.getScriptProperties();
-        let lock = LockService.getScriptLock();
-        if(lock.tryLock(5000)) {
+        let lock = LockService.getUserLock();
+        if (lock.tryLock(5000)) {
             let countKey = booth + "CompletedCount";
             let c = parseInt(props.getProperty(countKey) || "0", 10);
             props.setProperty(countKey, (c+1).toString());
             lock.releaseLock();
         }
-
-        let cache = CacheService.getScriptCache();
+        
         cache.remove("activeSession_" + booth);
         cache.remove("completedPositions_" + booth);
+        cache.remove("sessionVoter_" + booth);
         
         return setJsonOutput({status: "success"});
     }
@@ -176,18 +210,21 @@ function doPost(e) {
         let cache = CacheService.getScriptCache();
         cache.remove("activeSession_" + bodyData.booth);
         cache.remove("completedPositions_" + bodyData.booth);
+        cache.remove("sessionVoter_" + bodyData.booth);
         return setJsonOutput({status: "success"});
     }
     
     if (action === 'deleteVoter') {
         let voterId = bodyData.voterId;
+        if (!voterId || voterId === "UNKNOWN") {
+            return setJsonOutput({status: "success", deletedRows: 0, note: "no_id_to_delete"});
+        }
         let sheet = getOrCreateSheetSystem();
         let data = sheet.getDataRange().getValues();
         let deletedRows = 0;
         
-        // delete from bottom to top to avoid shifting indexes incorrectly
         for (let i = data.length - 1; i > 0; i--) {
-             if (data[i][5] === voterId) { // column F is VoterID
+             if (data[i][5] === voterId) {
                  sheet.deleteRow(i + 1);
                  deletedRows++;
              }
@@ -202,19 +239,19 @@ function doPost(e) {
            sheet.deleteRows(2, lastRow - 1);
        }
        
-       // Reset all counters to zero explicitly
        let props = PropertiesService.getScriptProperties();
        props.setProperty("boysIdCount", "0");
        props.setProperty("girlsIdCount", "0");
        props.setProperty("boysCompletedCount", "0");
        props.setProperty("girlsCompletedCount", "0");
 
-       // Clear all active session cache entries so stale tokens don't linger
        let cache = CacheService.getScriptCache();
        cache.remove("activeSession_boys");
        cache.remove("activeSession_girls");
        cache.remove("completedPositions_boys");
        cache.remove("completedPositions_girls");
+       cache.remove("sessionVoter_boys");
+       cache.remove("sessionVoter_girls");
        
        return setJsonOutput({status: "success"});
     }

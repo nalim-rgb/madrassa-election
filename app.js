@@ -347,7 +347,7 @@ async function initVoter(booth) {
         
         bc.postMessage({type: 'success', booth: booth});
         
-        await backendRequest('endSession', {booth: booth});
+        await backendRequest('endSession', {booth: booth, sessionToken: currentToken});
         
         let audio = new Audio(SUCCESS_SOUND);
         audio.play().catch(e => console.log("Audio play blocked by browser", e));
