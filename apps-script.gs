@@ -138,16 +138,18 @@ function doPost(e) {
         let cache = CacheService.getScriptCache();
         let voterId = cache.get("session_voter_" + sessionToken) || "UNKNOWN";
         
-        let sheet = getOrCreateSheetSystem();
-        sheet.appendRow([new Date(), booth, position, candidate, sessionToken, voterId]);
-        
         let completedRaw = cache.get("completedPositions_" + booth);
         let completed = completedRaw ? JSON.parse(completedRaw) : [];
         
-        if (!completed.includes(position)) {
-            completed.push(position);
-            cache.put("completedPositions_" + booth, JSON.stringify(completed), 3600);
+        if (completed.includes(position)) {
+            return setJsonOutput({status: "error", message: "Already voted for this position"});
         }
+        
+        let sheet = getOrCreateSheetSystem();
+        sheet.appendRow([new Date(), booth, position, candidate, sessionToken, voterId]);
+        
+        completed.push(position);
+        cache.put("completedPositions_" + booth, JSON.stringify(completed), 3600);
         
         return setJsonOutput({status: "success"});
     }
@@ -167,6 +169,13 @@ function doPost(e) {
             lock.releaseLock();
         }
         
+        return setJsonOutput({status: "success"});
+    }
+    
+    if (action === 'killToken') {
+        let cache = CacheService.getScriptCache();
+        cache.remove("activeSession_" + bodyData.booth);
+        cache.remove("completedPositions_" + bodyData.booth);
         return setJsonOutput({status: "success"});
     }
     
@@ -193,8 +202,10 @@ function doPost(e) {
            sheet.deleteRows(2, lastRow - 1);
        }
        let props = PropertiesService.getScriptProperties();
-       props.deleteProperty("boysCount");
-       props.deleteProperty("girlsCount");
+       props.deleteProperty("boysIdCount");
+       props.deleteProperty("girlsIdCount");
+       props.deleteProperty("boysCompletedCount");
+       props.deleteProperty("girlsCompletedCount");
        return setJsonOutput({status: "success"});
     }
 

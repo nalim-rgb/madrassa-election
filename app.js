@@ -62,6 +62,11 @@ async function backendRequest(action, payload = {}) {
             saveOfflineVotes(votes);
             return {status: "success", deletedRows: initialLength - votes.length};
         }
+        
+        if (action === 'killToken') {
+            localStorage.removeItem('activeSession_' + payload.booth);
+            return {status: "success"};
+        }
 
         if (action === 'resetVotes') {
             localStorage.removeItem('offlineVotes');
@@ -187,12 +192,23 @@ async function backendPollOrGet(action, params={}) {
 // ============================================
 // VOTER LOGIC
 // ============================================
-function initVoter(booth) {
+async function initVoter(booth) {
+    let oldToken = localStorage.getItem('activeSession_' + booth);
+    let oldVid = localStorage.getItem('activeVoterId_' + booth);
+
     // Clear stale sessions when the voter kiosk is freshly loaded/reloaded
     localStorage.removeItem('activeSession_' + booth);
     localStorage.removeItem('activeVoterId_' + booth);
     currentToken = null;
     currentVoterId = null;
+
+    if (oldToken) {
+        // A page reload happened mid-vote! Destroy the session in the backend.
+        await backendRequest('killToken', {booth: booth});
+        if (oldVid) {
+            await backendRequest('deleteVoter', {voterId: oldVid});
+        }
+    }
 
     let positionsForBooth = POSITIONS.map(p => ({
         ...p,
@@ -213,15 +229,8 @@ function initVoter(booth) {
         screen?.classList.remove('hidden');
     }
 
-    function checkActiveSession() {
+    async function checkActiveSession() {
         if (isSubmitting) return; 
-        
-        let localToken = localStorage.getItem('activeSession_' + booth);
-        if (localToken && localToken !== currentToken) {
-            let locVoter = localStorage.getItem('activeVoterId_' + booth);
-            startVoting(localToken, locVoter);
-            return;
-        }
         
         if (BACKEND_URL && BACKEND_URL.trim() !== "") {
             backendPollOrGet('poll', {booth: booth}).then(res => {
