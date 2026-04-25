@@ -1,5 +1,5 @@
 // Google Apps Script Web App for Madrassa Election
-// VERSION: 5 - Race Condition Final Fix
+// VERSION: 6 - Final Definitive Fix
 
 const SHEET_NAME_VOTES = "Votes";
 
@@ -20,6 +20,14 @@ function getOrCreateSheetSystem() {
   return votesSheet;
 }
 
+// Helper: extract voter ID from token string (format: "B-001::VOTER::uuid")
+function extractVoterIdFromToken(token) {
+    if (token && token.indexOf("::VOTER::") !== -1) {
+        return token.split("::VOTER::")[0];
+    }
+    return null;
+}
+
 function doGet(e) {
   let action = e.parameter.action;
   
@@ -33,14 +41,16 @@ function doGet(e) {
     let completed = completedRaw ? JSON.parse(completedRaw) : [];
     let totalCount = parseInt(props.getProperty(booth + "CompletedCount") || "0", 10);
     
-    // FIX: Store voter ID on the SESSION KEY, not the token key.
-    // Token keys can be evicted by Google Cache under load causing UNKNOWN IDs.
-    let voterId = token ? (cache.get("sessionVoter_" + booth) || "UNKNOWN") : null;
+    // Extract voter ID from the token string itself (guaranteed, never UNKNOWN)
+    let voterId = "UNKNOWN";
+    if (token) {
+        voterId = extractVoterIdFromToken(token) || cache.get("sessionVoter_" + booth) || "UNKNOWN";
+    }
     
     return setJsonOutput({
         status: "success", 
         activeToken: token || null,
-        voterId: voterId || "UNKNOWN",
+        voterId: voterId,
         completedPositions: completed,
         totalCount: totalCount
     });
@@ -57,7 +67,7 @@ function doGet(e) {
     let latestVote = null;
     let uniqueVoters = {};
     
-    rows.forEach(row => {
+    rows.forEach(function(row) {
         let ts = row[0];
         let type = row[1];
         let position = row[2];
@@ -68,19 +78,15 @@ function doGet(e) {
         if(ts && ts instanceof Date) {
             if(!latestVote || ts > latestVote) latestVote = ts;
         }
-
         if(type) {
             tokens[type][token] = true;
         }
-        
         if (!results[position]) results[position] = { combined: {}, boys: {}, girls: {} };
         if (!results[position].combined[candidate]) results[position].combined[candidate] = 0;
         if (!results[position][type]) results[position][type] = {};
         if (!results[position][type][candidate]) results[position][type][candidate] = 0;
-        
         results[position].combined[candidate]++;
         results[position][type][candidate]++;
-        
         if (!uniqueVoters[voterId]) uniqueVoters[voterId] = { id: voterId, booth: type, ts: ts, count: 0 };
         uniqueVoters[voterId].count++;
     });
@@ -89,7 +95,7 @@ function doGet(e) {
     totals.girls = Object.keys(tokens.girls).length;
     totals.combined = totals.boys + totals.girls;
     
-    let votersList = Object.values(uniqueVoters).sort((a,b) => new Date(b.ts) - new Date(a.ts));
+    let votersList = Object.values(uniqueVoters).sort(function(a,b) { return new Date(b.ts) - new Date(a.ts); });
 
     return setJsonOutput({
        status: "success",
@@ -101,7 +107,7 @@ function doGet(e) {
     });
   }
 
-  return setJsonOutput({status: "error", message: "Unknown GET action or missing action parameter."});
+  return setJsonOutput({status: "error", message: "Unknown GET action."});
 }
 
 function doPost(e) {
@@ -109,13 +115,13 @@ function doPost(e) {
     let bodyData = JSON.parse(e.postData.contents);
     let action = bodyData.action;
     
+    // ── START SESSION ──────────────────────────────────────────────────────────
     if (action === 'startSession') {
        let booth = bodyData.booth;
        let cache = CacheService.getScriptCache();
        let props = PropertiesService.getScriptProperties();
-       let token = "TOKEN-" + Utilities.getUuid();
        
-       // Use USER lock so boys and girls can run simultaneously without blocking each other
+       // USER lock: boys and girls can run their ID counters simultaneously
        let lock = LockService.getUserLock();
        let voterId = "UNKNOWN";
        try {
@@ -126,36 +132,43 @@ function doPost(e) {
            props.setProperty(idKey, newIdCount.toString());
            voterId = booth.charAt(0).toUpperCase() + "-" + newIdCount.toString().padStart(3, '0');
        } catch (lockErr) {
-           // If lock times out, generate a safe fallback
-           voterId = booth.charAt(0).toUpperCase() + "-ERR";
+           voterId = booth.charAt(0).toUpperCase() + "-???";
        } finally {
            try { lock.releaseLock(); } catch(ex) {}
        }
 
-       // FIX: Store voter ID on a BOOTH key (not token key) so it's never evicted separately
+       // CRITICAL: Voter ID is EMBEDDED in the token string.
+       // This means it can NEVER be "UNKNOWN" even if cache is evicted under load.
+       let token = voterId + "::VOTER::" + Utilities.getUuid();
+
        cache.put("activeSession_" + booth, token, 7200);
        cache.put("completedPositions_" + booth, JSON.stringify([]), 7200);
-       cache.put("sessionVoter_" + booth, voterId, 7200);  // <-- booth key, not token key
+       cache.put("sessionVoter_" + booth, voterId, 7200);
        
        return setJsonOutput({status: "success", token: token, voterId: voterId});
     }
     
+    // ── VOTE ───────────────────────────────────────────────────────────────────
     if (action === 'vote') {
-        let { booth, position, candidate, sessionToken } = bodyData;
+        let booth = bodyData.booth;
+        let position = bodyData.position;
+        let candidate = bodyData.candidate;
+        let sessionToken = bodyData.sessionToken;
         let cache = CacheService.getScriptCache();
         
-        // Verify this vote belongs to the currently ACTIVE session
+        // Verify this vote belongs to the currently active session
         let activeToken = cache.get("activeSession_" + booth);
         if (!activeToken || activeToken !== sessionToken) {
             return setJsonOutput({status: "error", message: "Session token mismatch or expired."});
         }
         
-        let voterId = cache.get("sessionVoter_" + booth) || "UNKNOWN";
+        // Extract voter ID from the token (never UNKNOWN)
+        let voterId = extractVoterIdFromToken(sessionToken) || cache.get("sessionVoter_" + booth) || "UNKNOWN";
         
         let completedRaw = cache.get("completedPositions_" + booth);
         let completed = completedRaw ? JSON.parse(completedRaw) : [];
         
-        if (completed.includes(position)) {
+        if (completed.indexOf(position) !== -1) {
             return setJsonOutput({status: "error", message: "Already voted for this position"});
         }
         
@@ -168,28 +181,18 @@ function doPost(e) {
         return setJsonOutput({status: "success"});
     }
     
+    // ── END SESSION ────────────────────────────────────────────────────────────
     if (action === 'endSession') {
         let booth = bodyData.booth;
-        let sessionToken = bodyData.sessionToken; // FIX: frontend must send this
+        let sessionToken = bodyData.sessionToken;
         let cache = CacheService.getScriptCache();
         
-        // FIX: Only clear the session if the token we're ending is STILL the active one.
-        // This prevents a finishing voter from killing a brand-new session that just started!
+        // CRITICAL RACE CONDITION FIX:
+        // Only clear the session if the token being ended is STILL the active one.
+        // This prevents a finishing voter from destroying a brand-new session that
+        // the officer started in the same moment.
         let currentActiveToken = cache.get("activeSession_" + booth);
-        if (sessionToken && currentActiveToken && currentActiveToken !== sessionToken) {
-            // A new session was already started — do NOT clear it! Just increment count.
-            let props = PropertiesService.getScriptProperties();
-            let lock = LockService.getUserLock();
-            if (lock.tryLock(5000)) {
-                let countKey = booth + "CompletedCount";
-                let c = parseInt(props.getProperty(countKey) || "0", 10);
-                props.setProperty(countKey, (c+1).toString());
-                lock.releaseLock();
-            }
-            return setJsonOutput({status: "success", note: "new_session_preserved"});
-        }
-
-        // Safe to clear — the token matches the active session
+        
         let props = PropertiesService.getScriptProperties();
         let lock = LockService.getUserLock();
         if (lock.tryLock(5000)) {
@@ -198,7 +201,13 @@ function doPost(e) {
             props.setProperty(countKey, (c+1).toString());
             lock.releaseLock();
         }
-        
+
+        if (sessionToken && currentActiveToken && currentActiveToken !== sessionToken) {
+            // A NEW session already started — preserve it, only increment count
+            return setJsonOutput({status: "success", note: "new_session_preserved"});
+        }
+
+        // Safe to clear — token matches (or no session token provided)
         cache.remove("activeSession_" + booth);
         cache.remove("completedPositions_" + booth);
         cache.remove("sessionVoter_" + booth);
@@ -206,6 +215,7 @@ function doPost(e) {
         return setJsonOutput({status: "success"});
     }
     
+    // ── KILL TOKEN (reload abort) ──────────────────────────────────────────────
     if (action === 'killToken') {
         let cache = CacheService.getScriptCache();
         cache.remove("activeSession_" + bodyData.booth);
@@ -214,15 +224,15 @@ function doPost(e) {
         return setJsonOutput({status: "success"});
     }
     
+    // ── DELETE VOTER ───────────────────────────────────────────────────────────
     if (action === 'deleteVoter') {
         let voterId = bodyData.voterId;
         if (!voterId || voterId === "UNKNOWN") {
-            return setJsonOutput({status: "success", deletedRows: 0, note: "no_id_to_delete"});
+            return setJsonOutput({status: "success", deletedRows: 0});
         }
         let sheet = getOrCreateSheetSystem();
         let data = sheet.getDataRange().getValues();
         let deletedRows = 0;
-        
         for (let i = data.length - 1; i > 0; i--) {
              if (data[i][5] === voterId) {
                  sheet.deleteRow(i + 1);
@@ -232,6 +242,7 @@ function doPost(e) {
         return setJsonOutput({status: "success", deletedRows: deletedRows});
     }
 
+    // ── RESET VOTES ────────────────────────────────────────────────────────────
     if (action === 'resetVotes') {
        let sheet = getOrCreateSheetSystem();
        let lastRow = Math.max(sheet.getLastRow(), 1);

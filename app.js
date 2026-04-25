@@ -219,6 +219,8 @@ async function initVoter(booth) {
     let currentStep = 0;
     let selectedVotes = {};
     let isSubmitting = false;
+    let isShowingSuccess = false;  // prevents polls from hijacking the success screen
+    let successTimer = null;       // tracked so new voter can cancel the previous timer
 
     // UI Elements
     const screenLocked = document.getElementById('screen-locked');
@@ -231,7 +233,9 @@ async function initVoter(booth) {
     }
 
     async function checkActiveSession() {
-        if (isSubmitting) return; 
+        if (isSubmitting) return;
+        // Don't interfere while showing the success screen
+        if (isShowingSuccess) return;
         
         if (BACKEND_URL && BACKEND_URL.trim() !== "") {
             backendPollOrGet('poll', {booth: booth}).then(res => {
@@ -239,8 +243,7 @@ async function initVoter(booth) {
                     if (res.activeToken && res.activeToken !== currentToken) {
                         startVoting(res.activeToken, res.voterId);
                     } else if (!res.activeToken && currentToken) {
-                        // Backend says token is dead (or it was aborted by officer)
-                        // KICK THEM OUT!
+                        // Backend says token is dead — abort
                         currentToken = null;
                         currentVoterId = null;
                         showScreen(screenLocked);
@@ -258,9 +261,26 @@ async function initVoter(booth) {
         }
     };
 
+    // Helper: extract voter ID embedded in the token string as a reliable fallback
+    function extractVoterIdFromToken(token) {
+        if (token && token.includes('::VOTER::')) {
+            return token.split('::VOTER::')[0];
+        }
+        return null;
+    }
+
     function startVoting(token, voterId) {
+        // Cancel any pending success-screen timer from the PREVIOUS voter!
+        // Without this, the previous 10s timer would kick the new voter off mid-vote.
+        if (successTimer) {
+            clearTimeout(successTimer);
+            successTimer = null;
+        }
+        isShowingSuccess = false;
+
         currentToken = token;
-        currentVoterId = voterId || "UNKNOWN";
+        // Use the voter ID from the token string if the cache-based one is missing
+        currentVoterId = (voterId && voterId !== 'UNKNOWN') ? voterId : (extractVoterIdFromToken(token) || 'UNKNOWN');
         localStorage.setItem('activeSession_' + booth, token); 
         localStorage.setItem('activeVoterId_' + booth, currentVoterId);
         currentStep = 0;
@@ -355,16 +375,20 @@ async function initVoter(booth) {
         document.getElementById('success-voter-id').innerText = currentVoterId;
         showScreen(screenSuccess);
         
-        // Clear token immediately so the 3-second poll doesn't mistake the finished session for an abort!
-        currentToken = null; 
+        // Clear token immediately so polls don't mistake the finished session for an abort
+        currentToken = null;
+        isShowingSuccess = true;
 
-        setTimeout(() => {
+        successTimer = setTimeout(() => {
+            isShowingSuccess = false;
+            successTimer = null;
             bc.postMessage({type: 'reset', booth: booth});
             currentVoterId = null;
             showScreen(screenLocked);
         }, 10000);
     }
 }
+
 
 // ============================================
 // OFFICER LOGIC
