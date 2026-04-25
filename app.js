@@ -360,7 +360,7 @@ async function initVoter(booth) {
             currentToken = null;
             currentVoterId = null;
             showScreen(screenLocked);
-        }, 6000);
+        }, 20000);
     }
 }
 
@@ -489,7 +489,14 @@ function initOfficer(booth) {
             lastKnownCompletedCount = pollRes.totalCount;
         }
 
-        const res = await backendRequest('startSession', {booth: booth});
+        let res = await backendRequest('startSession', {booth: booth});
+        
+        // Auto-retry if Google Apps Script blocks the concurrent request
+        if (res.status === 'error' || !res.voterId || res.voterId === "UNKNOWN") {
+            await new Promise(r => setTimeout(r, 1000)); // wait 1s to let the other booth finish
+            res = await backendRequest('startSession', {booth: booth});
+        }
+
         let token = res.token || ("TOKEN-" + Math.random().toString(36).substr(2, 9));
         let voterId = res.voterId || "UNKNOWN";
 
