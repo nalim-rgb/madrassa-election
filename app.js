@@ -234,8 +234,16 @@ async function initVoter(booth) {
         
         if (BACKEND_URL && BACKEND_URL.trim() !== "") {
             backendPollOrGet('poll', {booth: booth}).then(res => {
-                if(res.status === 'success' && res.activeToken && res.activeToken !== currentToken) {
-                    startVoting(res.activeToken, res.voterId);
+                if(res.status === 'success') {
+                    if (res.activeToken && res.activeToken !== currentToken) {
+                        startVoting(res.activeToken, res.voterId);
+                    } else if (!res.activeToken && currentToken) {
+                        // Backend says token is dead (or it was aborted by officer)
+                        // KICK THEM OUT!
+                        currentToken = null;
+                        currentVoterId = null;
+                        showScreen(screenLocked);
+                    }
                 }
             });
         }
@@ -501,7 +509,7 @@ function initAdmin() {
     let currentAdminData = null;
 
     window.checkPassword = function() {
-        const pw = document.getElementById('admin-pw').value;
+        const pw = document.getElementById('admin-pw').value.trim();
         if(pw === 'madrassa2025admin') {
             loginScreen.classList.add('hidden');
             dbScreen.classList.remove('hidden');
@@ -510,6 +518,15 @@ function initAdmin() {
         } else {
             alert("Incorrect Password!");
         }
+    }
+    
+    let pwInput = document.getElementById('admin-pw');
+    if (pwInput) {
+        pwInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                checkPassword();
+            }
+        });
     }
 
     async function loadResults() {
