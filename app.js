@@ -354,10 +354,12 @@ async function initVoter(booth) {
 
         document.getElementById('success-voter-id').innerText = currentVoterId;
         showScreen(screenSuccess);
+        
+        // Clear token immediately so the 3-second poll doesn't mistake the finished session for an abort!
+        currentToken = null; 
 
         setTimeout(() => {
             bc.postMessage({type: 'reset', booth: booth});
-            currentToken = null;
             currentVoterId = null;
             showScreen(screenLocked);
         }, 20000);
