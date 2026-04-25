@@ -436,27 +436,31 @@ function initOfficer(booth) {
     setInterval(async () => {
         let res = await backendPollOrGet('poll', {booth: booth});
         if(res && res.status === 'success') {
-            if(counterDisplay && res.totalCount !== undefined) {
-                counterDisplay.innerText = res.totalCount;
-                
-                if (res.totalCount > lastKnownCompletedCount) {
-                    isVotingInProgress = false; // Backend confirmed success!
-                }
-                lastKnownCompletedCount = res.totalCount; // Always sync to catch resets
-            }
+            let newCount = res.totalCount !== undefined ? res.totalCount : lastKnownCompletedCount;
+            let countIncreased = newCount > lastKnownCompletedCount;
 
-            if(!res.activeToken) {
+            // STEP 1: If count went UP, session completed successfully — mark done BEFORE checking token
+            if (countIncreased) {
+                isVotingInProgress = false;
+            }
+            lastKnownCompletedCount = newCount; // Always sync (catches resets too)
+
+            if (counterDisplay) counterDisplay.innerText = newCount;
+
+            // STEP 2: Only AFTER updating isVotingInProgress, evaluate the token state
+            if (!res.activeToken) {
                 if (isVotingInProgress) {
+                    // TRUE abort: count did NOT go up AND session vanished
                     isVotingInProgress = false;
                     resetGrid();
                     setOfficerState(false);
-                    
+
                     errorMsg.style.display = 'block';
                     errorMsg.className = 'message error';
                     errorMsg.style.backgroundColor = '#ef4444';
                     errorMsg.style.color = 'white';
                     errorMsg.innerText = `Session aborted! Erasing incomplete votes for ${currentSessionVoterId}...`;
-                    
+
                     if (currentSessionVoterId) {
                         backendRequest('deleteVoter', {voterId: currentSessionVoterId}).then(() => {
                             errorMsg.innerText = `Session aborted. Votes for ${currentSessionVoterId} erased.`;
@@ -464,16 +468,17 @@ function initOfficer(booth) {
                                 errorMsg.style.display = 'none';
                                 errorMsg.style.backgroundColor = '';
                                 errorMsg.style.color = '';
-                            }, 5000);
+                            }, 6000);
                         });
                     }
                 } else {
+                    // Session finished cleanly or no session was running
                     resetGrid();
                     setOfficerState(false);
                 }
             } else {
                 setOfficerState(true);
-                if(res.completedPositions) {
+                if (res.completedPositions) {
                     res.completedPositions.forEach(pos => pingGreen(pos));
                 }
             }

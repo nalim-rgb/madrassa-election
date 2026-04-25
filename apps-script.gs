@@ -201,11 +201,21 @@ function doPost(e) {
        if (lastRow > 1) {
            sheet.deleteRows(2, lastRow - 1);
        }
+       
+       // Reset all counters to zero explicitly
        let props = PropertiesService.getScriptProperties();
-       props.deleteProperty("boysIdCount");
-       props.deleteProperty("girlsIdCount");
-       props.deleteProperty("boysCompletedCount");
-       props.deleteProperty("girlsCompletedCount");
+       props.setProperty("boysIdCount", "0");
+       props.setProperty("girlsIdCount", "0");
+       props.setProperty("boysCompletedCount", "0");
+       props.setProperty("girlsCompletedCount", "0");
+
+       // Clear all active session cache entries so stale tokens don't linger
+       let cache = CacheService.getScriptCache();
+       cache.remove("activeSession_boys");
+       cache.remove("activeSession_girls");
+       cache.remove("completedPositions_boys");
+       cache.remove("completedPositions_girls");
+       
        return setJsonOutput({status: "success"});
     }
 
