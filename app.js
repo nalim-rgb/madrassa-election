@@ -362,7 +362,7 @@ async function initVoter(booth) {
             bc.postMessage({type: 'reset', booth: booth});
             currentVoterId = null;
             showScreen(screenLocked);
-        }, 20000);
+        }, 10000);
     }
 }
 
@@ -495,12 +495,19 @@ function initOfficer(booth) {
         
         // Auto-retry if Google Apps Script blocks the concurrent request
         if (res.status === 'error' || !res.voterId || res.voterId === "UNKNOWN") {
-            await new Promise(r => setTimeout(r, 1000)); // wait 1s to let the other booth finish
+            await new Promise(r => setTimeout(r, 1500)); // wait 1.5s to let the other booth finish
             res = await backendRequest('startSession', {booth: booth});
         }
 
-        let token = res.token || ("TOKEN-" + Math.random().toString(36).substr(2, 9));
-        let voterId = res.voterId || "UNKNOWN";
+        if (res.status === 'error' || !res.voterId || res.voterId === "UNKNOWN") {
+            alert("Network Error: Google Servers are momentarily busy. Please click Start New Voter again.");
+            startBtn.disabled = false;
+            startBtn.innerHTML = 'Start New Voter';
+            return;
+        }
+
+        let token = res.token;
+        let voterId = res.voterId;
 
         localStorage.setItem('activeSession_' + booth, token);
         localStorage.setItem('activeVoterId_' + booth, voterId);
