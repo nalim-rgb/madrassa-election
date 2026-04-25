@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Girls Voting - Madrassa Election</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header class="header">
+        <div class="bismillah">IMP ELECTION 2026</div>
+        <div class="school-title">1997-I-Ulamudheen Higher Secondary Madrassa</div>
+    </header>
+
+    <div class="container">
+        <!-- Locked Screen -->
+        <div id="screen-locked" class="card">
+            <div class="booth-label" style="background:#ec4899; color:white">Girls Booth</div>
+            <h2>Waiting for Authorization...</h2>
+            <p style="margin-top:1rem; color:var(--text-secondary)">Please approach the Officer's desk to verify your
+                identity.</p>
+            <div style="margin-top:2rem"><span class="loader" style="border-top-color:var(--primary-color);"></span>
+            </div>
+        </div>
+
+        <!-- Voting Screen -->
+        <div id="screen-voting" class="card hidden">
+            <div class="booth-label" style="background:#ec4899; color:white">Girls Booth</div>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <h2 id="pos-title" class="position-title">Position</h2>
+            <div id="candidates-container" class="candidates-grid"></div>
+            <div style="display:flex; gap:1rem; margin-top:2rem;">
+                <button class="btn" id="btn-submit-vote" onclick="submitPositionVote()" disabled>Submit Vote</button>
+            </div>
+        </div>
+
+        <!-- Success Screen -->
+        <div id="screen-success" class="card hidden">
+            <div style="font-size: 80px; color: var(--success); margin-bottom: 1rem;">✅</div>
+            <h2 class="position-title">Jazakallah Khair!</h2>
+            <p style="font-size: 1.2rem;">Your vote has been recorded securely.</p>
+            <div
+                style="margin-top:2rem; font-size:1.5rem; font-weight:800; background:#f1f5f9; padding:1rem; border-radius:8px;">
+                Your Vote ID: <span id="success-voter-id" style="color:var(--primary-color);">...</span>
+            </div>
+            <p style="margin-top:1rem; color:var(--text-secondary); font-size:0.9rem;">Please note this ID for any
+                future reference.</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="candidates.js"></script>
+    <script src="app.js"></script>
+    <script>
+        initVoter('girls');
+        function unlockKiosk() {
+            if (document.getElementById('kiosk-pin').value === 'NM4321') {
+                document.getElementById('kiosk-lock').style.display = 'none';
+            } else {
+                document.getElementById('kiosk-error').style.display = 'block';
+                setTimeout(() => document.getElementById('kiosk-error').style.display = 'none', 2000);
+            }
+        }
+    </script>
+
+    <!-- Kiosk Lock Screen -->
+    <div id="kiosk-lock"
+        style="position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#f8fafc;">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">🔒</div>
+        <h2 style="margin-bottom: 2rem; color:var(--text-primary); font-family: 'Outfit', sans-serif;">Device Locked
+        </h2>
+        <input type="password" id="kiosk-pin" placeholder="Enter PIN"
+            style="font-size: 1.5rem; padding: 1rem; text-align: center; width: 250px; margin-bottom: 1rem; border-radius: 8px; border: 2px solid #cbd5e1;">
+        <button class="btn" onclick="unlockKiosk()" style="width: 250px; background-color: #ec4899;">Unlock
+            Booth</button>
+        <p id="kiosk-error" style="color: red; margin-top: 1rem; display: none; font-weight: bold;">Incorrect PIN</p>
+    </div>
+</body>
+
+</html>

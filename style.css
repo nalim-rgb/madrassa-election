@@ -1,0 +1,282 @@
+@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;600;800&display=swap');
+
+:root {
+    --primary-color: #0b5c3b; /* Deep green for Islamic aesthetic */
+    --primary-light: #167e54;
+    --accent: #d4af37; /* Gold accent */
+    --accent-hover: #f1c40f;
+    --success: #2ecc71;
+    --error: #e74c3c;
+    --bg-color: #f7f9f7;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --card-bg: #ffffff;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-image: url('data:image/svg+xml;utf8,<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><path d="M20 0l20 20-20 20L0 20z" fill="%23e8ece8" fill-opacity="0.3"/></svg>');
+}
+
+.header {
+    background-color: var(--primary-color);
+    color: white;
+    text-align: center;
+    padding: 1.5rem 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    position: relative;
+    border-bottom: 4px solid var(--accent);
+}
+
+.bismillah {
+    font-family: 'Amiri', serif;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+}
+
+.school-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.container {
+    flex: 1;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    width: 100%;
+}
+
+.card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.booth-label {
+    display: inline-block;
+    background-color: var(--accent);
+    color: var(--primary-color);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 800;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+    text-transform: uppercase;
+}
+
+.position-title {
+    font-size: 1.8rem;
+    margin-bottom: 2rem;
+    font-weight: 600;
+}
+
+.candidates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.candidate-card {
+    background: var(--bg-color);
+    border: 3px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 2rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    user-select: none;
+}
+
+.candidate-card:hover {
+    border-color: var(--primary-light);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+}
+
+.candidate-card.selected {
+    border-color: var(--primary-color);
+    background-color: #e8f5e9;
+    box-shadow: 0 0 0 4px rgba(11, 92, 59, 0.2);
+}
+
+.candidate-icon {
+    font-size: 80px;
+    line-height: 1;
+    margin-bottom: 1rem;
+}
+
+.candidate-icon.image-icon {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    margin-bottom: 1rem;
+}
+
+.candidate-name {
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+select, input, .btn {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.2rem;
+}
+
+.btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 1rem;
+    transition: background-color 0.2s;
+}
+
+.btn:hover {
+    background-color: var(--primary-light);
+}
+
+.btn:disabled:not(.loading) {
+    background-color: var(--text-secondary);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+@keyframes pulse-btn {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(11, 92, 59, 0.4); }
+    70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(11, 92, 59, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(11, 92, 59, 0); }
+}
+
+#btn-next:not(:disabled), #btn-submit:not(:disabled) {
+    animation: pulse-btn 2s infinite;
+}
+
+.btn-secondary { background-color: var(--text-secondary); }
+.btn-secondary:hover { background-color: #475569; }
+
+.btn-danger { background-color: var(--error); }
+.btn-danger:hover { background-color: #c0392b; }
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background-color: #e2e8f0;
+    border-radius: 4px;
+    margin-bottom: 2rem;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.status-box {
+    background: #e2e8f0;
+    padding: 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.status-box.active {
+    background-color: var(--success);
+    color: white;
+    box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);
+    transform: scale(1.02);
+}
+
+.loader {
+    border: 3px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top: 3px solid white;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.message {
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    display: none;
+    font-weight: 600;
+}
+.message.error { background-color: #fee2e2; color: var(--error); border: 1px solid #fecaca; display: block; }
+.message.success { background-color: #d1fae5; color: var(--success); border: 1px solid #a7f3d0; display: block; }
+
+/* Review List */
+.review-list {
+    text-align: left;
+    margin-bottom: 2rem;
+}
+.review-item {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+}
+.review-item strong {
+    color: var(--primary-color);
+}
+
+/* Admin Grid */
+.admin-stats { display: flex; gap: 1rem; margin-bottom: 2rem; }
+.stat-box { flex: 1; background: white; padding: 1.5rem; border-radius: 8px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-top: 4px solid var(--primary-color); }
+.stat-value { font-size: 2.5rem; font-weight: 800; color: var(--primary-color); }
+
+.chart-container { margin-bottom: 3rem; background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.chart-container h3 { margin-bottom: 1rem; }
+.table-container { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+th { background-color: #f8fafc; font-weight: 600; }
+
+.hidden { display: none !important; }
+
+/* Mobile */
+@media (max-width: 600px) {
+    .status-grid { grid-template-columns: 1fr; }
+    .bismillah { font-size: 1.5rem; }
+    .school-title { font-size: 1rem; }
+    .admin-stats { flex-direction: column; }
+}
