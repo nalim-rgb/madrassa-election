@@ -362,6 +362,9 @@ async function initVoter(booth) {
     }
 
     async function finishVoting() {
+        // Snapshot the voter ID NOW before any async calls can overwrite currentVoterId
+        const completedVoterId = currentVoterId;
+
         localStorage.removeItem('activeSession_' + booth);
         localStorage.removeItem('activeVoterId_' + booth);
         
@@ -372,7 +375,8 @@ async function initVoter(booth) {
         let audio = new Audio(SUCCESS_SOUND);
         audio.play().catch(e => console.log("Audio play blocked by browser", e));
 
-        document.getElementById('success-voter-id').innerText = currentVoterId;
+        // Use the snapshotted ID — guaranteed to be correct even if currentVoterId changed
+        document.getElementById('success-voter-id').innerText = completedVoterId || 'N/A';
         showScreen(screenSuccess);
         
         // Clear token immediately so polls don't mistake the finished session for an abort
